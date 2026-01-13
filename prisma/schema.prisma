@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Property {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  price       Float
+  type        String   // "sell" or "rent"
+  category    String   // "apartment", "house", "villa", etc.
+  region      String
+  bedrooms    Int?
+  bathrooms   Int?
+  area        Float?
+  address     String?
+  images      String[] // Array of image URLs
+  featured    Boolean  @default(false)
+  views       Int      @default(0)
+  status      String   @default("active") // "active", "sold", "rented"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  leads       Lead[]
+}
+
+model Lead {
+  id         String   @id @default(cuid())
+  name       String
+  email      String?
+  phone      String
+  message    String   @db.Text
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
+  status     String   @default("new") // "new", "contacted", "qualified", "closed"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model HeroSlide {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  title     String?
+  subtitle  String?
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SiteSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
