@@ -207,8 +207,8 @@
 </div>
 
 {#if showImportModal}
-	<div class="modal-overlay" on:click={closeModal}>
-		<div class="modal" on:click|stopPropagation>
+	<div class="modal-overlay" role="button" tabindex="0" on:click={closeModal} on:keydown={(e) => e.key === 'Escape' && closeModal()}>
+		<div class="modal" role="dialog" aria-modal="true" tabindex="-1" on:click|stopPropagation on:keydown|stopPropagation>
 			<div class="modal-header">
 				<h2>Import Properties from CSV</h2>
 				<button class="close-btn" on:click={closeModal}>×</button>

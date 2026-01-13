@@ -1,31 +1,36 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { goto } from '$app/navigation';
+	import PropertyCard from '$lib/components/PropertyCard.svelte';
 
 	export let data: PageData;
 
 	let typeFilter = data.filters.type;
 	let statusFilter = data.filters.status;
+	let searchQuery = data.filters.search;
+	let searchTimeout: any;
 
 	function applyFilters() {
 		const params = new URLSearchParams();
 		if (typeFilter) params.set('type', typeFilter);
 		if (statusFilter) params.set('status', statusFilter);
+		if (searchQuery) params.set('search', searchQuery);
 		goto(`/dashboard/inventory?${params.toString()}`);
+	}
+
+	function handleSearch() {
+		// Debounce search to avoid too many requests
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			applyFilters();
+		}, 500);
 	}
 
 	function resetFilters() {
 		typeFilter = '';
 		statusFilter = '';
+		searchQuery = '';
 		goto('/dashboard/inventory');
-	}
-
-	function formatPrice(price: number) {
-		return new Intl.NumberFormat('en-US', {
-			style: 'currency',
-			currency: 'USD',
-			minimumFractionDigits: 0
-		}).format(price);
 	}
 </script>
 
@@ -33,6 +38,31 @@
 	<div class="page-header">
 		<h1>Property Inventory</h1>
 		<button class="add-btn">+ Add Property</button>
+	</div>
+
+	<div class="search-section">
+		<div class="search-bar">
+			<svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+				<path
+					d="M9 17A8 8 0 1 0 9 1a8 8 0 0 0 0 16zM19 19l-4.35-4.35"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+			<input
+				type="text"
+				placeholder="Search by title, description, region, category, address..."
+				bind:value={searchQuery}
+				on:input={handleSearch}
+			/>
+			{#if searchQuery}
+				<button class="clear-search" on:click={() => { searchQuery = ''; applyFilters(); }}>
+					✕
+				</button>
+			{/if}
+		</div>
 	</div>
 
 	<div class="filters">
@@ -52,55 +82,33 @@
 		<button class="reset-btn" on:click={resetFilters}>Reset</button>
 	</div>
 
-	<div class="table-section">
+	<div class="results-section">
 		<p class="results-count">{data.properties.length} properties found</p>
-		<div class="table-container">
-			<table>
-				<thead>
-					<tr>
-						<th>Title</th>
-						<th>Type</th>
-						<th>Category</th>
-						<th>Region</th>
-						<th>Price</th>
-						<th>Status</th>
-						<th>Views</th>
-						<th>Featured</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.properties as property}
-						<tr>
-							<td>
-								<a href="/property/{property.id}" target="_blank">{property.title}</a>
-							</td>
-							<td>
-								<span class="badge {property.type}">{property.type}</span>
-							</td>
-							<td>{property.category}</td>
-							<td>{property.region}</td>
-							<td>{formatPrice(property.price)}</td>
-							<td>
-								<span class="badge {property.status}">{property.status}</span>
-							</td>
-							<td>{property.views}</td>
-							<td>
+		
+		{#if data.properties.length > 0}
+			<div class="properties-grid">
+				{#each data.properties as property}
+					<div class="property-card-wrapper">
+						<PropertyCard {property} />
+						<div class="card-actions">
+							<button class="action-btn edit">Edit</button>
+							<button class="action-btn delete">Delete</button>
+							<div class="card-stats">
+								<span class="views">👁️ {property.views}</span>
 								{#if property.featured}
-									<span class="featured-star">⭐</span>
-								{:else}
-									<span class="not-featured">-</span>
+									<span class="featured-badge">⭐ Featured</span>
 								{/if}
-							</td>
-							<td>
-								<button class="action-btn edit">Edit</button>
-								<button class="action-btn delete">Delete</button>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+							</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="no-results">
+				<p>No properties found</p>
+				<button class="reset-btn" on:click={resetFilters}>Clear Filters</button>
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -137,6 +145,57 @@
 		background: #218838;
 	}
 
+	.search-section {
+		margin-bottom: 1.5rem;
+	}
+
+	.search-bar {
+		position: relative;
+		display: flex;
+		align-items: center;
+		background: white;
+		border: 2px solid #e0e0e0;
+		border-radius: 8px;
+		padding: 0.75rem 1rem;
+		transition: border-color 0.3s;
+	}
+
+	.search-bar:focus-within {
+		border-color: #0066cc;
+	}
+
+	.search-icon {
+		color: #999;
+		margin-right: 0.75rem;
+		flex-shrink: 0;
+	}
+
+	.search-bar input {
+		flex: 1;
+		border: none;
+		outline: none;
+		font-size: 1rem;
+		color: #333;
+	}
+
+	.search-bar input::placeholder {
+		color: #999;
+	}
+
+	.clear-search {
+		background: none;
+		border: none;
+		color: #999;
+		font-size: 1.25rem;
+		cursor: pointer;
+		padding: 0 0.5rem;
+		transition: color 0.3s;
+	}
+
+	.clear-search:hover {
+		color: #333;
+	}
+
 	.filters {
 		display: flex;
 		gap: 1rem;
@@ -161,106 +220,49 @@
 		border-radius: 6px;
 		cursor: pointer;
 		font-weight: 600;
+		transition: background 0.3s;
 	}
 
 	.reset-btn:hover {
 		background: #5a6268;
 	}
 
-	.table-section {
-		background: white;
-		padding: 1.5rem;
-		border-radius: 12px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	.results-section {
+		margin-top: 2rem;
 	}
 
 	.results-count {
-		margin-bottom: 1rem;
+		margin-bottom: 1.5rem;
 		color: #666;
+		font-size: 1rem;
 	}
 
-	.table-container {
-		overflow-x: auto;
+	.properties-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		gap: 2rem;
 	}
 
-	table {
-		width: 100%;
-		border-collapse: collapse;
+	.property-card-wrapper {
+		position: relative;
 	}
 
-	thead {
-		background: #f8f9fa;
-	}
-
-	th {
-		padding: 1rem;
-		text-align: left;
-		font-weight: 600;
-		color: #333;
-		border-bottom: 2px solid #e0e0e0;
-		white-space: nowrap;
-	}
-
-	td {
-		padding: 1rem;
-		border-bottom: 1px solid #e0e0e0;
-	}
-
-	td a {
-		color: #0066cc;
-		text-decoration: none;
-	}
-
-	td a:hover {
-		text-decoration: underline;
-	}
-
-	.badge {
-		display: inline-block;
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-size: 0.875rem;
-		font-weight: 600;
-		text-transform: capitalize;
-	}
-
-	.badge.sell {
-		background: #e7f3ff;
-		color: #0066cc;
-	}
-
-	.badge.rent {
-		background: #d4edda;
-		color: #155724;
-	}
-
-	.badge.active {
-		background: #d4edda;
-		color: #155724;
-	}
-
-	.badge.sold,
-	.badge.rented {
-		background: #f8d7da;
-		color: #721c24;
-	}
-
-	.featured-star {
-		font-size: 1.25rem;
-	}
-
-	.not-featured {
-		color: #ccc;
+	.card-actions {
+		margin-top: 1rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
 	}
 
 	.action-btn {
 		padding: 0.5rem 1rem;
 		border: none;
-		border-radius: 4px;
+		border-radius: 6px;
 		cursor: pointer;
 		font-size: 0.875rem;
 		font-weight: 600;
-		margin-right: 0.5rem;
+		transition: background 0.3s;
 	}
 
 	.action-btn.edit {
@@ -281,6 +283,38 @@
 		background: #c82333;
 	}
 
+	.card-stats {
+		margin-left: auto;
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.views {
+		font-size: 0.875rem;
+		color: #666;
+	}
+
+	.featured-badge {
+		font-size: 0.875rem;
+		color: #f59e0b;
+		font-weight: 600;
+	}
+
+	.no-results {
+		text-align: center;
+		padding: 3rem 1rem;
+		background: white;
+		border-radius: 12px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.no-results p {
+		font-size: 1.25rem;
+		color: #666;
+		margin-bottom: 1.5rem;
+	}
+
 	@media (max-width: 768px) {
 		.page-header {
 			flex-direction: column;
@@ -298,6 +332,29 @@
 
 		.filters select,
 		.reset-btn {
+			width: 100%;
+		}
+
+		.properties-grid {
+			grid-template-columns: 1fr;
+			gap: 1.5rem;
+		}
+
+		.search-bar input {
+			font-size: 0.875rem;
+		}
+
+		.card-actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.card-stats {
+			margin-left: 0;
+			justify-content: center;
+		}
+
+		.action-btn {
 			width: 100%;
 		}
 	}
