@@ -9,62 +9,125 @@ let statusFilter = data.filters.status;
 let searchQuery = '';
 let selectedProperty: any = null;
 let showDetailsPanel = false;
+let searchResults: any[] = [];
+let isSearching = false;
+let searchDebounceTimer: any;
+let totalMatches = 0;
+let showingSearchResults = false;
 
-$: filteredProperties = data.properties.filter(property => {
-const matchesSearch = !searchQuery || 
-property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-property.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-property.region.toLowerCase().includes(searchQuery.toLowerCase()) ||
-property.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-(property.address && property.address.toLowerCase().includes(searchQuery.toLowerCase()));
+// Display initial 50 properties or search results
+$: displayedProperties = showingSearchResults ? searchResults : data.properties;
 
-return matchesSearch;
-});
+async function performSearch(query: string) {
+	if (!query || query.trim().length < 2) {
+		showingSearchResults = false;
+		searchResults = [];
+		totalMatches = 0;
+		return;
+	}
+
+	isSearching = true;
+	try {
+		const params = new URLSearchParams({
+			q: query.trim(),
+			...(typeFilter && { type: typeFilter }),
+			...(statusFilter && { status: statusFilter }),
+			limit: '50'
+		});
+
+		const response = await fetch(`/api/properties/search?${params.toString()}`);
+		const result = await response.json();
+
+		if (result.properties) {
+			searchResults = result.properties;
+			totalMatches = result.totalMatches || 0;
+			showingSearchResults = true;
+		}
+	} catch (error) {
+		console.error('Search failed:', error);
+		searchResults = [];
+		totalMatches = 0;
+	} finally {
+		isSearching = false;
+	}
+}
+
+function handleSearchInput(event: Event) {
+	const value = (event.target as HTMLInputElement).value;
+	searchQuery = value;
+
+	// Clear existing timer
+	if (searchDebounceTimer) {
+		clearTimeout(searchDebounceTimer);
+	}
+
+	// Set new timer for debounced search
+	if (value.trim().length >= 2) {
+		searchDebounceTimer = setTimeout(() => {
+			performSearch(value);
+		}, 400);
+	} else {
+		showingSearchResults = false;
+		searchResults = [];
+		totalMatches = 0;
+	}
+}
 
 function applyFilters() {
-const params = new URLSearchParams();
-if (typeFilter) params.set('type', typeFilter);
-if (statusFilter) params.set('status', statusFilter);
-goto(`/dashboard/inventory?${params.toString()}`);
+	const params = new URLSearchParams();
+	if (typeFilter) params.set('type', typeFilter);
+	if (statusFilter) params.set('status', statusFilter);
+	goto(`/dashboard/inventory?${params.toString()}`);
+	
+	// Re-run search if active
+	if (searchQuery && searchQuery.trim().length >= 2) {
+		performSearch(searchQuery);
+	}
 }
 
 function resetFilters() {
-typeFilter = '';
-statusFilter = '';
-searchQuery = '';
-goto('/dashboard/inventory');
+	typeFilter = '';
+	statusFilter = '';
+	searchQuery = '';
+	showingSearchResults = false;
+	searchResults = [];
+	totalMatches = 0;
+	goto('/dashboard/inventory');
 }
 
 function openDetails(property: any) {
-selectedProperty = property;
-showDetailsPanel = true;
+	selectedProperty = property;
+	showDetailsPanel = true;
 }
 
 function closeDetails() {
-showDetailsPanel = false;
-setTimeout(() => {
-selectedProperty = null;
-}, 300);
+	showDetailsPanel = false;
+	setTimeout(() => {
+		selectedProperty = null;
+	}, 300);
 }
 
 function handleOverlayClick(event: MouseEvent) {
-if (event.target === event.currentTarget) {
-closeDetails();
-}
+	if (event.target === event.currentTarget) {
+		closeDetails();
+	}
 }
 
 function formatPrice(price: number) {
-return new Intl.NumberFormat('en-US', {
-style: 'currency',
-currency: 'USD',
-minimumFractionDigits: 0
-}).format(price);
+	return new Intl.NumberFormat('en-US', {
+		style: 'currency',
+		currency: 'USD',
+		minimumFractionDigits: 0
+	}).format(price);
 }
 </script>
 
 <div class="inventory-page">
 <div class="page-header">
+<div>
 <h1>Property Inventory</h1>
+<p class="header-subtitle">{showingSearchResults ? `Searching from ${data.totalCount.toLocaleString()} properties` : `Showing first 50 of ${data.totalCount.toLocaleString()} properties`}</p>
+</div>
 <button class="add-btn">+ Add Property</button>
 </div>
 
@@ -81,15 +144,26 @@ stroke-linejoin="round"
 </svg>
 <input
 type="text"
-placeholder="Search by title, description, region, category, address..."
-bind:value={searchQuery}
+placeholder="Search across all properties... (min 2 characters)"
+value={searchQuery}
+on:input={handleSearchInput}
 />
-{#if searchQuery}
-<button class="clear-search" on:click={() => { searchQuery = ''; }}>
+{#if isSearching}
+<div class="search-loading">
+<svg class="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none">
+<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+</svg>
+</div>
+{:else if searchQuery}
+<button class="clear-search" on:click={() => { searchQuery = ''; showingSearchResults = false; searchResults = []; }}>
 ✕
 </button>
 {/if}
 </div>
+{#if showingSearchResults && searchQuery}
+<p class="search-info">🔍 Found {totalMatches.toLocaleString()} matches - showing top 50 results</p>
+{/if}
 </div>
 
 <div class="filters">
@@ -110,11 +184,11 @@ bind:value={searchQuery}
 </div>
 
 <div class="results-section">
-<p class="results-count">{filteredProperties.length} properties found</p>
+<p class="results-count">{displayedProperties.length} properties displayed</p>
 
-{#if filteredProperties.length > 0}
+{#if displayedProperties.length > 0}
 <div class="properties-grid">
-{#each filteredProperties as property}
+{#each displayedProperties as property}
 <div class="property-card-wrapper">
 <div on:click={() => openDetails(property)} on:keydown={(e) => e.key === 'Enter' && openDetails(property)} role="button" tabindex="0">
 <div class="property-card">
@@ -295,6 +369,12 @@ margin-bottom: 2rem;
 h1 {
 font-size: 2rem;
 color: #333;
+margin: 0 0 0.5rem 0;
+}
+
+.header-subtitle {
+font-size: 0.875rem;
+color: #666;
 margin: 0;
 }
 
@@ -348,6 +428,36 @@ color: #333;
 
 .search-bar input::placeholder {
 color: #999;
+}
+
+.search-loading {
+display: flex;
+align-items: center;
+margin-left: 0.5rem;
+color: #0066cc;
+}
+
+.animate-spin {
+animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+from {
+transform: rotate(0deg);
+}
+to {
+transform: rotate(360deg);
+}
+}
+
+.search-info {
+margin-top: 0.75rem;
+padding: 0.75rem 1rem;
+background: #e7f3ff;
+color: #0066cc;
+border-radius: 6px;
+font-size: 0.875rem;
+font-weight: 600;
 }
 
 .clear-search {
