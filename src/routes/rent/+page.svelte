@@ -22,6 +22,14 @@
 		selectedRegion = '';
 		goto('/rent');
 	}
+
+	function goToPage(page: number) {
+		const params = new URLSearchParams();
+		if (selectedCategory) params.set('category', selectedCategory);
+		if (selectedRegion) params.set('region', selectedRegion);
+		params.set('page', page.toString());
+		goto(`/rent?${params.toString()}`);
+	}
 </script>
 
 <Navbar />
@@ -61,7 +69,7 @@
 			</div>
 
 			<div class="results-count">
-				<p>{data.properties.length} properties found</p>
+				<p>{data.pagination.totalCount} properties found | Page {data.pagination.currentPage} of {data.pagination.totalPages}</p>
 			</div>
 
 			{#if data.properties.length > 0}
@@ -70,6 +78,43 @@
 						<PropertyCard {property} />
 					{/each}
 				</div>
+
+				{#if data.pagination.totalPages > 1}
+					<div class="pagination">
+						<button 
+							class="page-btn" 
+							on:click={() => goToPage(data.pagination.currentPage - 1)}
+							disabled={data.pagination.currentPage === 1}
+						>
+							← Previous
+						</button>
+
+						<div class="page-numbers">
+							{#each Array(data.pagination.totalPages) as _, i}
+								{@const pageNum = i + 1}
+								{#if pageNum === 1 || pageNum === data.pagination.totalPages || (pageNum >= data.pagination.currentPage - 1 && pageNum <= data.pagination.currentPage + 1)}
+									<button 
+										class="page-btn" 
+										class:active={pageNum === data.pagination.currentPage}
+										on:click={() => goToPage(pageNum)}
+									>
+										{pageNum}
+									</button>
+								{:else if pageNum === data.pagination.currentPage - 2 || pageNum === data.pagination.currentPage + 2}
+									<span class="ellipsis">...</span>
+								{/if}
+							{/each}
+						</div>
+
+						<button 
+							class="page-btn" 
+							on:click={() => goToPage(data.pagination.currentPage + 1)}
+							disabled={data.pagination.currentPage === data.pagination.totalPages}
+						>
+							Next →
+						</button>
+					</div>
+				{/if}
 			{:else}
 				<div class="no-results">
 					<p>No properties found matching your criteria.</p>
@@ -179,6 +224,54 @@
 		padding: 4rem 2rem;
 		color: #666;
 		font-size: 1.2rem;
+	}
+
+	.pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 3rem;
+		flex-wrap: wrap;
+	}
+
+	.page-numbers {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.page-btn {
+		padding: 0.5rem 1rem;
+		border: 1px solid #ddd;
+		background: white;
+		color: #333;
+		border-radius: 6px;
+		cursor: pointer;
+		font-weight: 500;
+		transition: all 0.3s;
+	}
+
+	.page-btn:hover:not(:disabled) {
+		background: #007bff;
+		color: white;
+		border-color: #007bff;
+	}
+
+	.page-btn.active {
+		background: #007bff;
+		color: white;
+		border-color: #007bff;
+	}
+
+	.page-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.ellipsis {
+		padding: 0 0.5rem;
+		color: #666;
 	}
 
 	@media (max-width: 768px) {
